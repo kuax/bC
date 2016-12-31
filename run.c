@@ -26,17 +26,17 @@ int main(int argc, char *argv[]) {
 			printf("BUF_SIZE\tDICT_SIZE\tLA_SIZE\tTIME\n");
 
 			int i, j;
-			for (i = 13; i < 14; i++) { // to test all range: 7 - 12
+			for (i = 10; i < 11; i++) { // to test all range: 7 - 12
 				for (j = 4; j < 5; j++) { // to test all range: 3 - (i-1)
-					int b_s = 1 << i;
+					int d_s = 1 << i;
 					int la_s = 1 << j;
 					//b_s--;
 					//la_s--;
-					int d_s = b_s - la_s;
+					int b_s = d_s + la_s;
 
 					clock_t begin = clock();
 					//sf_lz77(infile, outfile, b_s, d_s);
-					lzCompress(infile, b_s, la_s);
+					lzCompress(infile, d_s, la_s);
 					clock_t end = clock();
 
 //					long int outfsize;

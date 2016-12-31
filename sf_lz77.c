@@ -314,7 +314,7 @@ Match findMatch(SlidingWindow *sw) {
 
 		// Find current match
 		while (currentDictionaryChar == currentLookAheadChar
-				&& currentLength < sw->MAX_LOOK_AHEAD_SIZE) {
+				&& currentLength < sw->current_look_ahead_size - 1) {
 			currentLength++;
 			int tmpDictionaryPosition = (currentPosition + currentLength)
 					% sw->MAX_WINDOW_SIZE;
@@ -369,7 +369,7 @@ void writeOut(WritingBuffer *wb, int value, int nrBits) {
 				c = c << 1;
 		}
 		// Write to output
-		fwrite(&c, 1, 1, wb->outfile);
+		fwrite(&c, sizeof(char), 1, wb->outfile);
 	}
 }
 
@@ -396,6 +396,8 @@ void fillWindow(SlidingWindow *sw, FILE *inputfile, int charCount) {
 	int i = 0;
 	while (i < charCount && !feof(inputfile)) {
 		fread((sw->window + sw->end_position), sizeof(char), 1, inputfile);
+		if (feof(inputfile))
+			break;
 		sw->end_position++;
 		sw->end_position %= sw->MAX_WINDOW_SIZE;
 		sw->current_look_ahead_size++;
@@ -450,7 +452,7 @@ WritingBuffer initWritingBuffer(FILE *f, int element_size) {
 	return wb;
 }
 
-int lzCompress(char inpfile[], int window_size,
+int lzCompress(char inpfile[], int dictionary_size,
 		int look_ahead_size) {
 
 	/* ------------------------- SET UP ------------------------- */
@@ -486,17 +488,18 @@ int lzCompress(char inpfile[], int window_size,
 
 	// Initialize variables
 	int minMatchLength = 3;
+	int windowSize = dictionary_size + look_ahead_size;
 	int flagBitSize = 1;
-	int offsetBitSize = (int) ceil(log2(window_size - look_ahead_size + 1));
+	int offsetBitSize = (int) ceil(log2(dictionary_size));
 	int lengthBitSize = (int) ceil(log2(look_ahead_size - 1));
 	int nextBitSize = 8;
 
 	// Initialize main window
 	SlidingWindow mainWindow;
-	mainWindow.window = (char *) malloc(sizeof(char) * window_size);
-	mainWindow.MAX_WINDOW_SIZE = window_size;
+	mainWindow.window = (char *) malloc(sizeof(char) * windowSize);
+	mainWindow.MAX_WINDOW_SIZE = windowSize;
 	mainWindow.MAX_LOOK_AHEAD_SIZE = look_ahead_size;
-	mainWindow.MAX_DICTIONARY_SIZE = window_size - look_ahead_size;
+	mainWindow.MAX_DICTIONARY_SIZE = dictionary_size - 1;
 	mainWindow.dictionary_position = 0;
 	mainWindow.look_ahead_position = 0;
 	mainWindow.end_position = 0;
@@ -512,7 +515,7 @@ int lzCompress(char inpfile[], int window_size,
 	/* ------------------------ COMPRESS ------------------------ */
 
 	// Write lengths as shorts in first position of output file
-	fwrite(&window_size, sizeof(short), 1, flagFile);
+	fwrite(&dictionary_size, sizeof(short), 1, flagFile);
 	fwrite(&look_ahead_size, sizeof(short), 1, flagFile);
 
 	// Fill look ahead buffer as much as you can
@@ -540,7 +543,7 @@ int lzCompress(char inpfile[], int window_size,
 			writeOut(&flagWB, 1, flagBitSize); // 'Coded' flag
 			writeOut(&offsetWB, m.offset, offsetBitSize);
 			writeOut(&lengthWB, m.length, lengthBitSize);
-			writeOut(&nextWB, (unsigned int) m.next, nextBitSize);
+			writeOut(&nextWB, m.next, nextBitSize);
 //			printf("(%d, %d, %c)\n", m.offset, m.length, m.next);
 		}
 		int processedCharsCount =

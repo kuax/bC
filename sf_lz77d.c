@@ -366,24 +366,25 @@ int lzDecompress(char outfile[]) {
 	}
 
 	// Retrieve sizes of window and look ahead buffers
-	short window_size, look_ahead_size;
-	fread(&window_size, sizeof(short), 1, flagFile);
+	short dictionary_size, look_ahead_size;
+	fread(&dictionary_size, sizeof(short), 1, flagFile);
 	fread(&look_ahead_size, sizeof(short), 1, flagFile);
-	printf("Window size: %d\nLook Ahead size: %d\n", window_size,
+	printf("Dictionary size: %d\nLook Ahead size: %d\n", dictionary_size,
 			look_ahead_size);
 
 	// Initialize variables
 	int flagBitSize = 1;
-	int offsetBitSize = (int) ceil(log2(window_size - look_ahead_size + 1));
+	int windowSize = dictionary_size + look_ahead_size;
+	int offsetBitSize = (int) ceil(log2(dictionary_size));
 	int lengthBitSize = (int) ceil(log2(look_ahead_size - 1));
 	int nextBitSize = 8;
 
 	// Initialize main window
 	SlidingWindow mainWindow;
-	mainWindow.window = (char *) malloc(sizeof(char) * window_size);
-	mainWindow.MAX_WINDOW_SIZE = window_size;
+	mainWindow.window = (char *) malloc(sizeof(char) * windowSize);
+	mainWindow.MAX_WINDOW_SIZE = windowSize;
 	mainWindow.MAX_LOOK_AHEAD_SIZE = look_ahead_size;
-	mainWindow.MAX_DICTIONARY_SIZE = window_size - look_ahead_size;
+	mainWindow.MAX_DICTIONARY_SIZE = dictionary_size - 1;
 	mainWindow.dictionary_position = 0;
 	mainWindow.look_ahead_position = 0;
 	mainWindow.end_position = 0;
