@@ -2,6 +2,25 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <math.h>
+#define SIMPLE_MATCH 1
+#define FULL_MATCH 2
+#define INVALID_MATCH 3
+
+typedef struct gMatch {
+	short type;
+	int offset;
+	int length;
+	char next;
+} GeneralMatch;
+
+typedef struct slWindow {
+	char *window;
+	int dictionary_position, look_ahead_position, end_position;
+	short full_size_dictionary_flag;
+	// TODO: check which info is REALLY necessary
+	int MAX_WINDOW_SIZE, MAX_DICTIONARY_SIZE, MAX_LOOK_AHEAD_SIZE;
+	int window_size, dictionary_size, current_look_ahead_size;
+} SlidingWindow;
 
 typedef struct rBuf {
 	FILE *inpfile;
@@ -12,6 +31,8 @@ typedef struct rBuf {
 	int start_pos, write_pos;
 	int end_reached;
 } ReadingBuffer;
+
+#ifdef OLDCODE
 
 int printMem2(char *buf, int buf_size) {
 	int i;
@@ -178,6 +199,8 @@ void sf_lz77d(char infile[], char outfile[]) {
 
 }
 
+#endif
+
 ReadingBuffer initReadingBuffer(FILE *f, int element_size) {
 	ReadingBuffer rb;
 	rb.inpfile = f;
@@ -186,6 +209,137 @@ ReadingBuffer initReadingBuffer(FILE *f, int element_size) {
 	rb.bitValues = (char *) malloc(sizeof(char) * rb.MAX_SIZE);
 	rb.current_size = rb.start_pos = rb.write_pos = rb.end_reached = 0;
 	return rb;
+}
+
+void fillReadingBuffer(ReadingBuffer *rb) {
+	if (!rb->end_reached) {
+		while (rb->current_size < rb->ELEMENT_SIZE && !feof(rb->inpfile)) {
+			// Get next char in file and convert it into individual bits
+			char c = fgetc(rb->inpfile);
+			if (feof(rb->inpfile))
+				break;
+			int i;
+			unsigned char mask = (1 << 7);
+			for (i = 0; i < 8; i++) {
+				*(rb->bitValues + rb->write_pos) = (c & mask) == 0 ? '0' : '1';
+				mask = mask >> 1;
+				rb->write_pos++;
+				rb->write_pos %= rb->MAX_SIZE;
+				rb->current_size++;
+			}
+		}
+
+		// Check if end of file reached
+		if (feof(rb->inpfile))
+			rb->end_reached = 1;
+	}
+}
+
+int getNextElement(ReadingBuffer *rb) {
+	if (rb->current_size < rb->ELEMENT_SIZE)
+		return -1;
+	else {
+		int result = 0;
+		int i;
+		for (i = 0; i < rb->ELEMENT_SIZE; i++) {
+			result += *(rb->bitValues + rb->start_pos) == '0' ? 0 : 1;
+			rb->start_pos++;
+			rb->start_pos %= rb->MAX_SIZE;
+			rb->current_size--;
+			if (i < rb->ELEMENT_SIZE - 1)
+				result = result << 1;
+		}
+		return result;
+	}
+}
+
+GeneralMatch parseData(ReadingBuffer *flagRB, ReadingBuffer *offsetRB,
+		ReadingBuffer *lengthRB, ReadingBuffer *nextRB) {
+	// Initialize default match
+	GeneralMatch gm;
+	gm.type = INVALID_MATCH;
+
+	int flag = getNextElement(flagRB);
+	if (flag == 0) {
+		// Should expect a simple match
+		int next = getNextElement(nextRB);
+		if (next >= 0) {
+			gm.type = SIMPLE_MATCH;
+			gm.next = (char) next;
+//			printf("(%c)\n", gm.next);
+		}
+	} else if (flag == 1) {
+		// Should expect a full match
+		int offset = getNextElement(offsetRB);
+		int length = getNextElement(lengthRB);
+		int next = getNextElement(nextRB);
+		if (offset >= 0 && length >= 0 && next >= 0) {
+			gm.type = FULL_MATCH;
+			gm.offset = offset;
+			gm.length = length;
+			gm.next = (char) next;
+//			printf("(%d, %d, %c)\n", offset, length, next);
+		}
+	}
+
+	return gm;
+}
+
+void writeAndUpdateWindow(SlidingWindow *sw, GeneralMatch *gm, FILE *outfile) {
+	// Check Match type
+	if (gm->type == INVALID_MATCH) {
+		return;
+	} else if (gm->type == FULL_MATCH) {
+		// Write entire sequence while keeping sliding window up to date
+		int i;
+		for (i = 0; i < gm->length; i++) {
+			// Compute current position to read character from
+			int currentPosition = sw->look_ahead_position - gm->offset
+					+ sw->MAX_WINDOW_SIZE;
+			currentPosition %= sw->MAX_WINDOW_SIZE;
+
+			char currentChar = *(sw->window + currentPosition);
+
+			// Write character to output file
+			fwrite(&currentChar, sizeof(char), 1, outfile);
+
+			// Update sliding window
+			*(sw->window + sw->look_ahead_position) = currentChar;
+			sw->look_ahead_position++;
+			sw->look_ahead_position %= sw->MAX_WINDOW_SIZE;
+
+			// Check if full dictionary size is reached
+			if (!sw->full_size_dictionary_flag
+					&& sw->look_ahead_position >= sw->MAX_DICTIONARY_SIZE) {
+				sw->full_size_dictionary_flag = 1;
+				sw->dictionary_position += sw->look_ahead_position
+						- sw->MAX_DICTIONARY_SIZE;
+			} else if (sw->full_size_dictionary_flag) {
+				sw->dictionary_position++;
+				sw->dictionary_position %= sw->MAX_WINDOW_SIZE;
+			}
+		}
+	}
+
+	// As long as match is valid, there is a next char to write!
+	// Write next character to output file
+	fwrite(&(gm->next), sizeof(char), 1, outfile);
+
+	// Update sliding window
+	*(sw->window + sw->look_ahead_position) = gm->next;
+	sw->look_ahead_position++;
+	sw->look_ahead_position %= sw->MAX_WINDOW_SIZE;
+
+	// Check if full dictionary size is reached
+	if (!sw->full_size_dictionary_flag
+			&& sw->look_ahead_position >= sw->MAX_DICTIONARY_SIZE) {
+		sw->full_size_dictionary_flag = 1;
+		sw->dictionary_position += sw->look_ahead_position
+				- sw->MAX_DICTIONARY_SIZE;
+	} else if (sw->full_size_dictionary_flag) {
+		sw->dictionary_position++;
+		sw->dictionary_position %= sw->MAX_WINDOW_SIZE;
+	}
 }
 
 int lzDecompress(char outfile[]) {
@@ -224,7 +378,19 @@ int lzDecompress(char outfile[]) {
 	int lengthBitSize = (int) ceil(log2(look_ahead_size - 1));
 	int nextBitSize = 8;
 
-	// Initzalize reading buffers
+	// Initialize main window
+	SlidingWindow mainWindow;
+	mainWindow.window = (char *) malloc(sizeof(char) * window_size);
+	mainWindow.MAX_WINDOW_SIZE = window_size;
+	mainWindow.MAX_LOOK_AHEAD_SIZE = look_ahead_size;
+	mainWindow.MAX_DICTIONARY_SIZE = window_size - look_ahead_size;
+	mainWindow.dictionary_position = 0;
+	mainWindow.look_ahead_position = 0;
+	mainWindow.end_position = 0;
+	mainWindow.full_size_dictionary_flag = 0;
+
+
+	// Initialize reading buffers
 	ReadingBuffer flagRB, offsetRB, lengthRB, nextRB;
 	flagRB = initReadingBuffer(flagFile, flagBitSize);
 	offsetRB = initReadingBuffer(offsetFile, offsetBitSize);
@@ -233,8 +399,22 @@ int lzDecompress(char outfile[]) {
 
 	/* ------------------------- DECOMPRESS ------------------------- */
 
-	// Retrieve window and look ahead buffer sizes
 	// Loop while there is enough information to be able to decompress
+	GeneralMatch gm;
+	do {
+		// Fill reading buffers
+		fillReadingBuffer(&flagRB);
+		fillReadingBuffer(&offsetRB);
+		fillReadingBuffer(&lengthRB);
+		fillReadingBuffer(&nextRB);
+
+		// Interpret data
+		gm = parseData(&flagRB, &offsetRB, &lengthRB, &nextRB);
+
+		// Write characters to output file
+		writeAndUpdateWindow(&mainWindow, &gm, outfptr);
+
+	} while (gm.type != INVALID_MATCH);
 
 	/* ------------------------- CLEAN UP ------------------------- */
 	// Free allocated memory

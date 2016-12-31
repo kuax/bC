@@ -8,22 +8,22 @@
 #define DICT_SIZE 504
 
 int main(int argc, char *argv[]) {
-	if (argc < 4 && strcmp(argv[1], "-d") != 0) {
+	if (argc < 3) {
 		fprintf(stderr, "Numero di argomenti insufficiente!\n");
 		return 1;
 	} else {
 		if (strcmp(argv[1], "-c") == 0) {
 			char *infile = strcat(argv[2], "\0");
-			char *outfile = strcat(argv[3], "\0");
 			// Launch compression
 			//printf("--- Compression ---\n");
 			printf("%s\n", infile);
-			off_t inpfsize;
+			long int inpfsize;
 			struct stat inputfstat;
 			if (stat(infile, &inputfstat) == 0)
 				inpfsize = inputfstat.st_size;
 
-			printf("BUF_SIZE\tDICT_SIZE\tLA_SIZE\tRATIO\tTIME\n");
+//			printf("BUF_SIZE\tDICT_SIZE\tLA_SIZE\tRATIO\tTIME\n");
+			printf("BUF_SIZE\tDICT_SIZE\tLA_SIZE\tTIME\n");
 
 			int i, j;
 			for (i = 13; i < 14; i++) { // to test all range: 7 - 12
@@ -39,19 +39,17 @@ int main(int argc, char *argv[]) {
 					lzCompress(infile, b_s, la_s);
 					clock_t end = clock();
 
-					off_t outfsize;
-					struct stat outputfstat;
-					if (stat(outfile, &outputfstat) == 0)
-						outfsize = outputfstat.st_size;
-
-					double comp_ratio = (double) outfsize / inpfsize * 100.0;
+//					long int outfsize;
+//					struct stat outputfstat;
+//					if (stat(outfile, &outputfstat) == 0)
+//						outfsize = outputfstat.st_size;
+//
+//					double comp_ratio = (double) outfsize / inpfsize * 100.0;
 
 					double tot_time = (double) (end - begin) / CLOCKS_PER_SEC;
-					printf("%d\t%d\t%d\t%.2f\t%.2f\n", (b_s + 1), (d_s),
-							(la_s + 1),
-							comp_ratio,
+//					printf("%d\t%d\t%d\t%.2f\t%.2f\n", (b_s), (d_s), (la_s), comp_ratio, tot_time);
+					printf("%d\t%d\t%d\t%.2f\n", (b_s), (d_s), (la_s),
 							tot_time);
-
 				}
 			}
 			printf("\n");

@@ -326,7 +326,7 @@ Match findMatch(SlidingWindow *sw) {
 
 		// Update best match
 		if (currentLength > 0 && currentLength >= m.length) {
-			int tmpOffset = currentPosition - sw->look_ahead_position;
+			int tmpOffset = sw->look_ahead_position - currentPosition;
 			m.offset =
 					(tmpOffset < 0) ?
 							sw->MAX_WINDOW_SIZE + tmpOffset : tmpOffset;
@@ -345,10 +345,11 @@ Match findMatch(SlidingWindow *sw) {
 void writeOut(WritingBuffer *wb, int value, int nrBits) {
 	// Convert value to bits and store them in writing buffer
 	int mask = 1 << (nrBits - 1);
-	int i, d;
+	int i;
+	char d;
 	for (i = 0; i < nrBits; i++) {
-		d = (value & mask) != 0 ? 1 : 0;
-		*(wb->bitValues + wb->write_position) = (char) d;
+		d = (value & mask) != 0 ? '1' : '0';
+		*(wb->bitValues + wb->write_position) = d;
 		wb->write_position++;
 		wb->write_position %= wb->MAX_SIZE;
 		wb->current_size++;
@@ -360,7 +361,7 @@ void writeOut(WritingBuffer *wb, int value, int nrBits) {
 		char c = 0;
 		// Build char
 		for (i = 0; i < 8; i++) {
-			c += *(wb->bitValues + wb->start_position);
+			c += *(wb->bitValues + wb->start_position) == '0' ? 0 : 1;
 			wb->current_size--;
 			wb->start_position++;
 			wb->start_position %= wb->MAX_SIZE;
@@ -422,13 +423,14 @@ void flushWritingBuffer(WritingBuffer *wb) {
 
 	// Write last piece of information if present
 	if (wb->current_size > 0) {
-		char c = 0;
+		unsigned char c = 0;
 		// Build char
 		for (i = 0; i < wb->current_size; i++) {
-			c += *(wb->bitValues + wb->start_position);
+			c += *(wb->bitValues + wb->start_position) == '0' ? 0 : 1;
 			wb->start_position++;
 			wb->start_position %= wb->MAX_SIZE;
-			c = c << 1;
+			if (i < wb->current_size - 1)
+				c = c << 1;
 		}
 		// Shift remaining bits
 		c = c << (8 - wb->current_size);
@@ -528,19 +530,24 @@ int lzCompress(char inpfile[], int window_size,
 		if (m.length < minMatchLength) {
 			// Directly write next char
 			writeOut(&flagWB, 0, flagBitSize); // 'Uncoded' flag
-			writeOut(&nextWB, m.next, nextBitSize);
+			writeOut(&nextWB,
+					*(mainWindow.window + mainWindow.look_ahead_position),
+					nextBitSize);
+//			printf("(%c)\n",
+//					*(mainWindow.window + mainWindow.look_ahead_position));
 		} else {
 			// Write match data to corresponding write buffers
 			writeOut(&flagWB, 1, flagBitSize); // 'Coded' flag
 			writeOut(&offsetWB, m.offset, offsetBitSize);
 			writeOut(&lengthWB, m.length, lengthBitSize);
-			writeOut(&nextWB, m.next, nextBitSize);
+			writeOut(&nextWB, (unsigned int) m.next, nextBitSize);
+//			printf("(%d, %d, %c)\n", m.offset, m.length, m.next);
 		}
 		int processedCharsCount =
 				(m.length < minMatchLength) ? 1 : m.length + 1;
 
 		// Load new input data
-		fillWindow(&mainWindow, inpfptr, processedCharsCount); // TODO: implement function!
+		fillWindow(&mainWindow, inpfptr, processedCharsCount);
 	}
 
 	/* ------------------------ CLEAN UP ------------------------ */
