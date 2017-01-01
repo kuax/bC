@@ -17,9 +17,8 @@ typedef struct slWindow {
 	char *window;
 	int dictionary_position, look_ahead_position, end_position;
 	short full_size_dictionary_flag;
-	// TODO: check which info is REALLY necessary
 	int MAX_WINDOW_SIZE, MAX_DICTIONARY_SIZE, MAX_LOOK_AHEAD_SIZE;
-	int window_size, dictionary_size, current_look_ahead_size;
+	int current_look_ahead_size;
 } SlidingWindow;
 
 typedef struct rBuf {
