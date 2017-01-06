@@ -72,6 +72,74 @@ Match findMatch(SlidingWindow *sw) {
 	return m;
 }
 
+Match kmpFinder(SlidingWindow *sw) {
+	// Initialize default match
+	Match m;
+	m.offset = 0;
+	m.length = 0;
+	m.next = *((sw->window) + sw->look_ahead_position); // First char in look ahead
+
+	// Compute partial match table for look ahead buffer
+	int partialMatchTable[sw->current_look_ahead_size - 1];
+	// TODO: implement table populator
+
+	// Search the dictionary using KMP algorithm
+	int currentDictionaryPosition = sw->dictionary_position;
+	int currentLookAheadPosition = sw->look_ahead_position;
+	int charsSought = 0, currentLength = 0;
+
+	while (charsSought < sw->MAX_DICTIONARY_SIZE) { // TODO: check if it shouldn't be -1!
+		// Check if current chars are equal
+		if (*(sw->window + currentDictionaryPosition)
+				== *(sw->window + currentLookAheadPosition)) {
+			// Update current position and data
+			currentDictionaryPosition++;
+			currentLookAheadPosition++;
+			currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
+			currentLookAheadPosition %= sw->MAX_WINDOW_SIZE;
+			currentLength++;
+			charsSought++;
+
+			// Update best match if necessary
+			if (currentLength >= m.length
+					&& currentLength < sw->current_look_ahead_size - 1) {
+				int tmpOffset = sw->look_ahead_position
+						- currentDictionaryPosition;
+				m.offset =
+						(tmpOffset < 0) ?
+								sw->MAX_WINDOW_SIZE + tmpOffset : tmpOffset;
+				m.length = currentLength;
+				m.next = *(sw->window + currentLookAheadPosition);
+			} else if (currentLength >= sw->current_look_ahead_size - 1) {
+				// Longest match has already been found, interrupt search!
+				break;
+			}
+		} else {
+			if (partialMatchTable[currentLength] > -1) {
+				// Compute next position from which to start from
+				int delta = currentLength - partialMatchTable[currentLength]
+				currentDictionaryPosition += delta;
+				currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
+				charsSought += delta;
+				currentLength = partialMatchTable[currentLength];
+				// TODO: check correctness of next line, should it be -1?
+				currentLookAheadPosition = sw->look_ahead_position
+						+ currentLength;
+				currentLookAheadPosition %= sw->MAX_WINDOW_SIZE;
+			} else {
+				// Simply move forward one character in dictionary position and reset other data
+				currentDictionaryPosition++;
+				currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
+				currentLookAheadPosition = sw->look_ahead_position;
+				charsSought++;
+				currentLength = 0;
+			}
+		}
+	}
+
+	return m;
+}
+
 void writeOut(WritingBuffer *wb, int value, int nrBits) {
 	// Convert value to bits and store them in writing buffer
 	int mask = 1 << (nrBits - 1);
