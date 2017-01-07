@@ -8,7 +8,7 @@ typedef struct slWindow {
 	int dictionary_position, look_ahead_position, end_position;
 	short full_size_dictionary_flag;
 	int MAX_WINDOW_SIZE, MAX_DICTIONARY_SIZE, MAX_LOOK_AHEAD_SIZE;
-	int current_look_ahead_size;
+	int current_look_ahead_size, current_dictionary_size;
 } SlidingWindow;
 
 typedef struct wBuf {
@@ -80,62 +80,79 @@ Match kmpFinder(SlidingWindow *sw) {
 	m.next = *((sw->window) + sw->look_ahead_position); // First char in look ahead
 
 	// Compute partial match table for look ahead buffer
-	int partialMatchTable[sw->current_look_ahead_size - 1];
-	// TODO: implement table populator
+	int partialMatchTable[sw->current_look_ahead_size];
+	partialMatchTable[0] = -1;
+	if (sw->current_look_ahead_size > 1)
+		partialMatchTable[1] = 0;
+	int currentPosition = 2, currentLength = 0;
+	while (currentPosition < sw->current_look_ahead_size) {
+		char currentChar = *(sw->window
+				+ (sw->look_ahead_position
+				+ currentPosition - 1) % sw->MAX_WINDOW_SIZE);
+		char currentMatchChar = *((sw->window + sw->look_ahead_position
+				+ currentLength));
+		if (currentChar == currentMatchChar) {
+			partialMatchTable[currentPosition] = ++currentLength;
+			currentPosition++;
+		} else if (currentLength > 0) {
+			currentLength = partialMatchTable[currentLength];
+		} else {
+			partialMatchTable[currentPosition] = 0;
+			currentPosition++;
+		}
+	}
 
 	// Search the dictionary using KMP algorithm
-	int currentDictionaryPosition = sw->dictionary_position;
-	int currentLookAheadPosition = sw->look_ahead_position;
-	int charsSought = 0, currentLength = 0;
+	int currentDictionaryPosition = 0;
+	int currentLookAheadPosition = 0;
 
-	while (charsSought < sw->MAX_DICTIONARY_SIZE) { // TODO: check if it shouldn't be -1!
-		// Check if current chars are equal
-		if (*(sw->window + currentDictionaryPosition)
-				== *(sw->window + currentLookAheadPosition)) {
-			// Update current position and data
-			currentDictionaryPosition++;
+	while (currentDictionaryPosition < sw->current_dictionary_size) {
+		// Get current characters in both dictionary and look ahead buffers
+		char currentDictionaryChar = *(sw->window
+				+ (sw->dictionary_position
+				+ currentDictionaryPosition + currentLookAheadPosition)
+				% sw->MAX_WINDOW_SIZE);
+		char currentLookAheadChar = *(sw->window
+				+ (sw->look_ahead_position
+				+ currentLookAheadPosition) % sw->MAX_WINDOW_SIZE);
+
+		// Check equality
+		if (currentDictionaryChar == currentLookAheadChar
+				&& currentLookAheadPosition < sw->current_look_ahead_size - 1) {
 			currentLookAheadPosition++;
-			currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
-			currentLookAheadPosition %= sw->MAX_WINDOW_SIZE;
-			currentLength++;
-			charsSought++;
 
-			// Update best match if necessary
-			if (currentLength >= m.length
-					&& currentLength < sw->current_look_ahead_size - 1) {
+			// Check if match is better than previous, in which case update it
+			if (currentLookAheadPosition >= m.length) {
 				int tmpOffset = sw->look_ahead_position
-						- currentDictionaryPosition;
+						- (sw->dictionary_position + currentDictionaryPosition)
+								% sw->MAX_WINDOW_SIZE;
 				m.offset =
-						(tmpOffset < 0) ?
-								sw->MAX_WINDOW_SIZE + tmpOffset : tmpOffset;
-				m.length = currentLength;
-				m.next = *(sw->window + currentLookAheadPosition);
-			} else if (currentLength >= sw->current_look_ahead_size - 1) {
-				// Longest match has already been found, interrupt search!
+						tmpOffset >= 0 ?
+								tmpOffset : sw->MAX_WINDOW_SIZE + tmpOffset;
+				m.length = currentLookAheadPosition;
+				m.next = *(sw->window
+						+ (sw->look_ahead_position + currentLookAheadPosition)
+								% sw->MAX_WINDOW_SIZE);
+			}
+
+			// Check if all Look ahead buffer has been matched, in which case break
+			if (currentLookAheadPosition == sw->current_look_ahead_size - 1) {
 				break;
 			}
 		} else {
-			if (partialMatchTable[currentLength] > -1) {
-				// Compute next position from which to start from
-				int delta = currentLength - partialMatchTable[currentLength]
-				currentDictionaryPosition += delta;
-				currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
-				charsSought += delta;
-				currentLength = partialMatchTable[currentLength];
-				// TODO: check correctness of next line, should it be -1?
-				currentLookAheadPosition = sw->look_ahead_position
-						+ currentLength;
-				currentLookAheadPosition %= sw->MAX_WINDOW_SIZE;
+			if (partialMatchTable[currentLookAheadPosition] > -1) {
+				currentDictionaryPosition += currentLookAheadPosition
+						- partialMatchTable[currentLookAheadPosition];
+				currentLookAheadPosition =
+						partialMatchTable[currentLookAheadPosition];
 			} else {
-				// Simply move forward one character in dictionary position and reset other data
 				currentDictionaryPosition++;
-				currentDictionaryPosition %= sw->MAX_WINDOW_SIZE;
-				currentLookAheadPosition = sw->look_ahead_position;
-				charsSought++;
-				currentLength = 0;
+				currentLookAheadPosition = 0;
 			}
 		}
+
 	}
+
 
 	return m;
 }
@@ -187,6 +204,9 @@ void fillWindow(SlidingWindow *sw, FILE *inputfile, int charCount) {
 			sw->full_size_dictionary_flag = 1;
 			sw->dictionary_position = sw->look_ahead_position
 					- sw->MAX_DICTIONARY_SIZE;
+			sw->current_dictionary_size = sw->MAX_DICTIONARY_SIZE;
+		} else {
+			sw->current_dictionary_size += charCount;
 		}
 	}
 
@@ -302,6 +322,7 @@ int lzCompress(char inpfile[], int dictionary_size,
 	mainWindow.look_ahead_position = 0;
 	mainWindow.end_position = 0;
 	mainWindow.full_size_dictionary_flag = 0;
+	mainWindow.current_dictionary_size = 0;
 
 	// Initialize writing buffers
 	WritingBuffer flagWB, offsetWB, lengthWB, nextWB;
@@ -325,7 +346,16 @@ int lzCompress(char inpfile[], int dictionary_size,
 	while (mainWindow.current_look_ahead_size > 0) {
 
 		// Search dictionary
-		Match m = findMatch(&mainWindow);
+		//Match m = findMatch(&mainWindow);
+		Match m = kmpFinder(&mainWindow);
+
+		// DEBUG
+//		if (m.length != testMatch.length) {
+//			printf("Due lunghezze differiscono!\n");
+//			printf("(%d, %d, %c) -> (%d, %d, %c)\n", m.offset, m.length, m.next,
+//					testMatch.offset, testMatch.length, testMatch.next);
+//		}
+		// END DEBUG
 
 		// Write output
 		if (m.length < minMatchLength) {

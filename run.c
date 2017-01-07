@@ -26,8 +26,8 @@ int main(int argc, char *argv[]) {
 			printf("BUF_SIZE\tDICT_SIZE\tLA_SIZE\tTIME\n");
 
 			int i, j;
-			for (i = 10; i < 11; i++) { // to test all range: 7 - 12
-				for (j = 4; j < 5; j++) { // to test all range: 3 - (i-1)
+			for (i = 13; i < 14; i++) { // to test all range: 7 - 12
+				for (j = 9; j < 10; j++) { // to test all range: 3 - (i-1)
 					int d_s = 1 << i;
 					int la_s = 1 << j;
 					//b_s--;
