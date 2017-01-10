@@ -3,6 +3,13 @@
 #include <sys/stat.h>
 #include <math.h>
 
+#define CODED 1
+#define UNCODED 0
+
+/*
+ * Structure to contain the main window of the compression algorithm,
+ * implemented as a circular buffer.
+ */
 typedef struct slWindow {
 	char *window;
 	int dictionary_position, look_ahead_position, end_position;
@@ -11,18 +18,28 @@ typedef struct slWindow {
 	int current_look_ahead_size, current_dictionary_size;
 } SlidingWindow;
 
+/*
+ * A simple circular buffer used to write bits to output file.
+ */
 typedef struct wBuf {
 	FILE *outfile;
 	char *bitValues;
 	int MAX_SIZE, current_size, start_position, write_position;
 } WritingBuffer;
 
+/*
+ * A match as defined in LZ77: a set of three values (offset, length, next character)
+ */
 typedef struct match {
 	int offset;
 	int length;
 	char next;
 } Match;
 
+/*
+ * Naïve string search algorithm: sweep entire dictionary one character at a time
+ * and find longest match from current position.
+ */
 Match findMatch(SlidingWindow *sw) {
 	// Initialize default match
 	Match m;
@@ -72,6 +89,11 @@ Match findMatch(SlidingWindow *sw) {
 	return m;
 }
 
+/*
+ * Knuth-Morris-Pratt string search algorithm: sweep entire dictionary, but
+ * use information of every mismatch to jump ahead in dictionary, thus improving
+ * the naïve implementation
+ */
 Match kmpFinder(SlidingWindow *sw) {
 	// Initialize default match
 	Match m;
@@ -81,16 +103,20 @@ Match kmpFinder(SlidingWindow *sw) {
 
 	// Compute partial match table for look ahead buffer
 	int partialMatchTable[sw->current_look_ahead_size];
-	partialMatchTable[0] = -1;
+	partialMatchTable[0] = -1; // by definition
 	if (sw->current_look_ahead_size > 1)
-		partialMatchTable[1] = 0;
+		partialMatchTable[1] = 0; // by definition
 	int currentPosition = 2, currentLength = 0;
 	while (currentPosition < sw->current_look_ahead_size) {
+		// Retrieve current chars in circular buffer
 		char currentChar = *(sw->window
 				+ (sw->look_ahead_position
 				+ currentPosition - 1) % sw->MAX_WINDOW_SIZE);
 		char currentMatchChar = *((sw->window + sw->look_ahead_position
 				+ currentLength));
+
+		// Check if there is a match, partial match or no match at current position
+		// set values accordingly
 		if (currentChar == currentMatchChar) {
 			partialMatchTable[currentPosition] = ++currentLength;
 			currentPosition++;
@@ -107,7 +133,7 @@ Match kmpFinder(SlidingWindow *sw) {
 	int currentLookAheadPosition = 0;
 
 	while (currentDictionaryPosition < sw->current_dictionary_size) {
-		// Get current characters in both dictionary and look ahead buffers
+		// Get current characters in both dictionary and look ahead buffers (which are circular)
 		char currentDictionaryChar = *(sw->window
 				+ (sw->dictionary_position
 				+ currentDictionaryPosition + currentLookAheadPosition)
@@ -116,12 +142,14 @@ Match kmpFinder(SlidingWindow *sw) {
 				+ (sw->look_ahead_position
 				+ currentLookAheadPosition) % sw->MAX_WINDOW_SIZE);
 
-		// Check equality
+		// Check equality, but be careful not to go past look ahead buffer
 		if (currentDictionaryChar == currentLookAheadChar
 				&& currentLookAheadPosition < sw->current_look_ahead_size - 1) {
+
 			currentLookAheadPosition++;
 
-			// Check if match is better than previous, in which case update it
+			// Check if match is better than previous, in which case update it,
+			// also favouring smaller offsets when length is the same
 			if (currentLookAheadPosition >= m.length) {
 				int tmpOffset = sw->look_ahead_position
 						- (sw->dictionary_position + currentDictionaryPosition)
@@ -140,6 +168,8 @@ Match kmpFinder(SlidingWindow *sw) {
 				break;
 			}
 		} else {
+			// If the match has failed, see if you can skip ahead some characters
+			// based on the partial match table computed before
 			if (partialMatchTable[currentLookAheadPosition] > -1) {
 				currentDictionaryPosition += currentLookAheadPosition
 						- partialMatchTable[currentLookAheadPosition];
@@ -157,6 +187,11 @@ Match kmpFinder(SlidingWindow *sw) {
 	return m;
 }
 
+/*
+ * Function to write a given value using given number of bits on a writing buffer.
+ * If the buffer contains enough information to write a char to file, it writes it
+ * to the output file linked to the writing buffer.
+ */
 void writeOut(WritingBuffer *wb, int value, int nrBits) {
 	// Convert value to bits and store them in writing buffer
 	int mask = 1 << (nrBits - 1);
@@ -188,13 +223,18 @@ void writeOut(WritingBuffer *wb, int value, int nrBits) {
 	}
 }
 
+/*
+ * Function to fill the Sliding Window with given number of characters from input file.
+ * First update Look Ahead and Dictionary positions in the sliding window and update the
+ * size of the dictionary until it reaches its full size.
+ */
 void fillWindow(SlidingWindow *sw, FILE *inputfile, int charCount) {
 	// Set new look ahead position
 	sw->look_ahead_position += charCount;
 	sw->look_ahead_position %= sw->MAX_WINDOW_SIZE;
 	sw->current_look_ahead_size -= charCount;
 
-	// Set new dictionary position if necessary
+	// Set new dictionary position if dictionary is already full-sized
 	if (sw->full_size_dictionary_flag) {
 		sw->dictionary_position += charCount;
 		sw->dictionary_position %= sw->MAX_WINDOW_SIZE;
@@ -223,8 +263,12 @@ void fillWindow(SlidingWindow *sw, FILE *inputfile, int charCount) {
 	}
 }
 
+/*
+ * Function to empty a writing buffer: writes as many characters as it can, and
+ * appends as many '0' as needed to write last characters to the output file.
+ */
 void flushWritingBuffer(WritingBuffer *wb) {
-	// Write to output file if there are enough bits
+	// Write characters to output file as long as there are enough bits
 	int i;
 	while (wb->current_size >= 8) {
 		char c = 0;
@@ -241,7 +285,7 @@ void flushWritingBuffer(WritingBuffer *wb) {
 		fwrite(&c, 1, 1, wb->outfile);
 	}
 
-	// Write last piece of information if present
+	// Write last piece of information if present, filling with '0' on the right
 	if (wb->current_size > 0) {
 		unsigned char c = 0;
 		// Build char
@@ -261,6 +305,9 @@ void flushWritingBuffer(WritingBuffer *wb) {
 	}
 }
 
+/*
+ * Constructor for the writing buffer
+ */
 WritingBuffer initWritingBuffer(FILE *f, int element_size) {
 	WritingBuffer wb;
 	wb.outfile = f;
@@ -270,6 +317,9 @@ WritingBuffer initWritingBuffer(FILE *f, int element_size) {
 	return wb;
 }
 
+/*
+ * Main function, split into 3 parts: Set up, Compress and Clean up
+ */
 int lzCompress(char inpfile[], int dictionary_size,
 		int look_ahead_size) {
 
@@ -305,7 +355,7 @@ int lzCompress(char inpfile[], int dictionary_size,
 	}
 
 	// Initialize variables
-	int minMatchLength = 3;
+	int minMatchLength = 3; // Todo: check if 4 is better with 512B look ahead and 8kB dictionary
 	int windowSize = dictionary_size + look_ahead_size;
 	int flagBitSize = 1;
 	int offsetBitSize = (int) ceil(log2(dictionary_size));
@@ -342,38 +392,29 @@ int lzCompress(char inpfile[], int dictionary_size,
 			mainWindow.MAX_LOOK_AHEAD_SIZE, inpfptr);
 	mainWindow.current_look_ahead_size = mainWindow.end_position;
 
-	// Loop until look ahead buffer is empty
+	// MAIN LOOP: Loop until look ahead buffer is empty
 	while (mainWindow.current_look_ahead_size > 0) {
 
 		// Search dictionary
-		//Match m = findMatch(&mainWindow);
+		//Match m = findMatch(&mainWindow); // <--- NAIVE SEARCH ALGORITHM
 		Match m = kmpFinder(&mainWindow);
 
-		// DEBUG
-//		if (m.length != testMatch.length) {
-//			printf("Due lunghezze differiscono!\n");
-//			printf("(%d, %d, %c) -> (%d, %d, %c)\n", m.offset, m.length, m.next,
-//					testMatch.offset, testMatch.length, testMatch.next);
-//		}
-		// END DEBUG
-
-		// Write output
+		// Write different outputs based on the length of the match
 		if (m.length < minMatchLength) {
 			// Directly write next char
-			writeOut(&flagWB, 0, flagBitSize); // 'Uncoded' flag
+			writeOut(&flagWB, UNCODED, flagBitSize); // 'Uncoded' flag
 			writeOut(&nextWB,
 					*(mainWindow.window + mainWindow.look_ahead_position),
 					nextBitSize);
-//			printf("(%c)\n",
-//					*(mainWindow.window + mainWindow.look_ahead_position));
 		} else {
 			// Write match data to corresponding write buffers
-			writeOut(&flagWB, 1, flagBitSize); // 'Coded' flag
+			writeOut(&flagWB, CODED, flagBitSize); // 'Coded' flag
 			writeOut(&offsetWB, m.offset, offsetBitSize);
 			writeOut(&lengthWB, m.length, lengthBitSize);
 			writeOut(&nextWB, m.next, nextBitSize);
-//			printf("(%d, %d, %c)\n", m.offset, m.length, m.next);
 		}
+
+		// Define how many characters were processed
 		int processedCharsCount =
 				(m.length < minMatchLength) ? 1 : m.length + 1;
 
@@ -401,7 +442,7 @@ int lzCompress(char inpfile[], int dictionary_size,
 	fclose(lengthFile);
 	fclose(offsetFile);
 	fclose(flagFile);
-
 	fclose(inpfptr);
+
 	return 0;
 }
