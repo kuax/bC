@@ -2,10 +2,14 @@
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <math.h>
+
 #define INVALID_MATCH 0
 #define SIMPLE_MATCH 1
 #define FULL_MATCH 2
 
+/*
+ * General Match, includes partial, full or invalid match.
+ */
 typedef struct gMatch {
 	short type;
 	int offset;
@@ -13,6 +17,9 @@ typedef struct gMatch {
 	char next;
 } GeneralMatch;
 
+/*
+ * Sliding Window implemented as a circular buffer
+ */
 typedef struct slWindow {
 	char *window;
 	int dictionary_position, look_ahead_position, end_position;
@@ -21,6 +28,9 @@ typedef struct slWindow {
 	int current_look_ahead_size;
 } SlidingWindow;
 
+/*
+ * A simple circular buffer that gets filled with bit values of input chars.
+ */
 typedef struct rBuf {
 	FILE *inpfile;
 	char *bitValues;
@@ -31,6 +41,9 @@ typedef struct rBuf {
 	int end_reached;
 } ReadingBuffer;
 
+/*
+ * Constructor for a Reading Buffer.
+ */
 ReadingBuffer initReadingBuffer(FILE *f, int element_size) {
 	ReadingBuffer rb;
 	rb.inpfile = f;
@@ -41,6 +54,10 @@ ReadingBuffer initReadingBuffer(FILE *f, int element_size) {
 	return rb;
 }
 
+/*
+ * Function to fill a Reading Buffer with bit values of chars from the input file
+ * until there is enough information to parse an element, or the end of the file is reached.
+ */
 void fillReadingBuffer(ReadingBuffer *rb) {
 	if (!rb->end_reached) {
 		while (rb->current_size < rb->ELEMENT_SIZE && !feof(rb->inpfile)) {
@@ -65,10 +82,16 @@ void fillReadingBuffer(ReadingBuffer *rb) {
 	}
 }
 
+/*
+ * Function that gets an element from a Reading Buffer by converting the string of
+ * ELEMENT_SIZE bits into an integer value
+ */
 int getNextElement(ReadingBuffer *rb) {
+	// Check if there is enough information
 	if (rb->current_size < rb->ELEMENT_SIZE)
 		return -1;
 	else {
+		// Convert string into an integer value
 		int result = 0;
 		int i;
 		for (i = 0; i < rb->ELEMENT_SIZE; i++) {
@@ -83,6 +106,10 @@ int getNextElement(ReadingBuffer *rb) {
 	}
 }
 
+/*
+ * Function that returns the current match by interpreting elements in Reading Buffers.
+ * If there is not enough information, return an invalid match.
+ */
 GeneralMatch parseData(ReadingBuffer *flagRB, ReadingBuffer *offsetRB,
 		ReadingBuffer *lengthRB, ReadingBuffer *nextRB) {
 	// Initialize default match
@@ -91,15 +118,14 @@ GeneralMatch parseData(ReadingBuffer *flagRB, ReadingBuffer *offsetRB,
 
 	int flag = getNextElement(flagRB);
 	if (flag == 0) {
-		// Should expect a simple match
+		// Should expect a simple match, check value
 		int next = getNextElement(nextRB);
 		if (next >= 0) {
 			gm.type = SIMPLE_MATCH;
 			gm.next = (char) next;
-//			printf("(%c)\n", gm.next);
 		}
 	} else if (flag == 1) {
-		// Should expect a full match
+		// Should expect a full match, check values
 		int offset = getNextElement(offsetRB);
 		int length = getNextElement(lengthRB);
 		int next = getNextElement(nextRB);
@@ -108,13 +134,15 @@ GeneralMatch parseData(ReadingBuffer *flagRB, ReadingBuffer *offsetRB,
 			gm.offset = offset;
 			gm.length = length;
 			gm.next = (char) next;
-//			printf("(%d, %d, %c)\n", offset, length, next);
 		}
 	}
 
 	return gm;
 }
 
+/*
+ * Function to write match to output file and update the Sliding Window accordingly.
+ */
 void writeAndUpdateWindow(SlidingWindow *sw, GeneralMatch *gm, FILE *outfile) {
 	// Check Match type
 	if (gm->type == INVALID_MATCH) {
@@ -172,6 +200,9 @@ void writeAndUpdateWindow(SlidingWindow *sw, GeneralMatch *gm, FILE *outfile) {
 	}
 }
 
+/*
+ * Main decompression function, split into 3 parts: Set up, Decompression and Clean up.
+ */
 int lzDecompress(char outfile[]) {
 
 	/* ------------------------- SET UP ------------------------- */
