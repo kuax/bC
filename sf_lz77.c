@@ -355,7 +355,7 @@ int lzCompress(char inpfile[], int dictionary_size,
 	}
 
 	// Initialize variables
-	int minMatchLength = 4; // Todo: check if 4 is better with 512B look ahead and 8kB dictionary
+	int minMatchLength = 4;
 	int windowSize = dictionary_size + look_ahead_size;
 	int flagBitSize = 1;
 	int offsetBitSize = (int) ceil(log2(dictionary_size));

@@ -291,6 +291,12 @@ int lzDecompress(char outfile[]) {
 	fclose(offsetFile);
 	fclose(flagFile);
 
+	// Remove tmp files
+	remove("_flags.lztmp");
+	remove("_offsets.lztmp");
+	remove("_next.lztmp");
+	remove("_lengths.lztmp");
+
 	fclose(outfptr);
 
 	return 0;
