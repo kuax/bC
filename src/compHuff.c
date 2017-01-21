@@ -1,3 +1,11 @@
+/*
+ * This file contains all the necessary functions to compress the 4 files representing the LZ77 output.
+ * This Huffman adapts itself to whatever input size (defined as the number of bits that constitute each symbol)
+ * LZ77 has used to compress the original file
+ *
+ * Developer: Christian Paoliello
+*/
+
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -142,10 +150,10 @@ long calcFreqFromFile(FILE *pFile, int freq[], short inputSize) {
 	long lSize = ftell(pFile);
 	fseek(pFile, 0, SEEK_SET);
 	char word[1000];
-
+	//characters just read are put in buffer, here they may are filled with 0s
 	char buffer[200] = { 0 };
 	char tmp[200];
-	for (long q = 0; q < (long) (lSize / 1000); q++) //what if precisely divisor
+	for (long q = 0; q < (long) (lSize / 1000); q++)
 			{
 		fread(word, 1, 1000, pFile);
 
@@ -164,7 +172,7 @@ long calcFreqFromFile(FILE *pFile, int freq[], short inputSize) {
 			}
 		}
 	}
-	fread(word, 1, lSize % 1000, pFile);    //lSize%100-1
+	fread(word, 1, lSize % 1000, pFile);    
 
 	for (int w = 0; w < lSize % 1000; w++) {
 		convertTo8Bit((unsigned char) word[w], tmp);
@@ -177,11 +185,7 @@ long calcFreqFromFile(FILE *pFile, int freq[], short inputSize) {
 			buffer[strlen(buffer) - inputSize] = 0;
 		}
 	}
-
-	/*for(long q=0;q<lSize;q++)
-	 freq[(unsigned char)fgetc(pFile)]++;*/
-
-	return lSize;    //-1
+	return lSize;    
 }
 
 void convertTo8Bit(int val, char tmp[]) {
@@ -196,7 +200,7 @@ void convertTo8Bit(int val, char tmp[]) {
 
 int toDecimal(char bitToWrite[]) {
 	int val = 0;
-	int mul = 1;    //attention if overflow
+	int mul = 1;    
 	for (int q = strlen(bitToWrite) - 1; q >= 0; q--) {
 		val += mul * (bitToWrite[q] - 48);
 		mul *= 2;
@@ -216,7 +220,7 @@ int toBinary(int num, char store[]) {
 		num = (num - num % 2) / 2;
 	}
 	store[i] = '1';
-	//reversing
+	//reversing bit order
 	char tmp[200];
 	memset(tmp, 0, 200);
 	for (int q = strlen(store) - 1; q >= 0; q--)
@@ -265,7 +269,7 @@ void writeCompressed(short inputSize, int hs, FILE *pFile,
 			currentLen = 0;
 		char tmpBit[200];
 		//in tmpBit goes currentLen converted in binary
-		toBinary(currentLen, tmpBit);    //return binary length
+		toBinary(currentLen, tmpBit);    
 		while (strlen(tmpBit) < largestEncodingLen) {
 			for (int w = strlen(tmpBit); w > 0; w--)
 				tmpBit[w] = tmpBit[w - 1];
@@ -278,6 +282,7 @@ void writeCompressed(short inputSize, int hs, FILE *pFile,
 	}
 	//END OF MAP WRITING
 	char buffer[200] = { 0 };
+	//begin of file compressed writing
 	for (int byteIndex = 0; byteIndex < lSize || strlen(buffer) >= inputSize;) {
 		char tmp[200] = { 0 };
 
@@ -329,6 +334,8 @@ void writeCompressed(short inputSize, int hs, FILE *pFile,
 }
 
 void reverseBit(struct encoding myEncoding[], int differentChars) {
+	//situation before: 11100001
+	//after the function: 10000111
 	for (int encI = 0; encI < differentChars; encI++) {
 		int lenCode = strlen(myEncoding[encI].code);
 		char *tmp = malloc(sizeof(char) * (lenCode + 1));
@@ -355,15 +362,7 @@ void canonicalize(int upperBound, struct encoding myEncoding[],
 				touched = 1;
 				letterMappingInStruct[myEncoding[encI].letter]--;
 				letterMappingInStruct[myEncoding[encI + 1].letter]++;
-			}/*else
-			 if(strlen(myEncoding[encI].code)==strlen(myEncoding[encI].code) &&
-			 myEncoding[encI].letter>myEncoding[encI+1].letter)
-			 {
-			 struct encoding tmp=myEncoding[encI];
-			 myEncoding[encI]=myEncoding[encI+1];
-			 myEncoding[encI+1]=tmp;
-			 touched=1;
-			 }*/
+			}
 		}
 	}
 

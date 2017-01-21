@@ -1,4 +1,9 @@
 FILES=$(ls testInput/)
+
+if [ ! -d "testOutput" ]; then
+	mkdir testOutput
+fi
+
 for f in $FILES
 do
 	echo "$f"

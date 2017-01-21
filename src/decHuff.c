@@ -1,3 +1,11 @@
+/*
+ * This file contains all the functions needed to unpack the compressed file into 4 different files and
+ * then decompress each of those to restore the original 4 output files of LZ77.
+ * This Huffman algorithm adapt itself to whatever input size (defined as the number of bits that constitute each symbol)
+ * has been used in compression.
+ *
+ * Developer: Christian Paoliello
+*/
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +31,7 @@ void writeByteAndSaveEccessD(char bit[], FILE *output) {
 }
 
 int toBinaryD(int num, char store[]) {
+	//converts number to binary
 	int i = 0;
 	memset(store, 0, strlen(store));
 	if (num <= 1) {
@@ -56,12 +65,13 @@ int toDecimalD(char bitToWrite[]) {
 
 void readMap(unsigned char *buffer, int largestEncodingLen, FILE *pFile,
 		int lengths[], short inputSize) {
-	//fseek(pFile, 1, SEEK_SET);
+	
 	fread(buffer, sizeof(char),
 			ceil((pow(2, inputSize) * largestEncodingLen) / 8), pFile); //useless ceil
 	int byteI = 0;
 	char bit[100];
 	memset(bit, 0, 100);
+	//tmpBit is used as buffer for just read characters, it may be filled with 0s
 	char tmpBit[8 + 1];
 	memset(tmpBit, 0, 9);
 	int lenI = 0;
@@ -112,7 +122,7 @@ void orderMapAndRebuildEncodings(int *lengths, int *keysOfMap,
 	} while (!stop);
 	//binaryLen is the progressive canonical encoding
 	char *binaryLen = calloc(lengths[(int) pow(2, inputSize) - 1] + 1, 1);
-	//memset(binaryLen, 0, lengths[(int)pow(2, inputSize)-1]+1);
+	
 	for (int q = 0; q < pow(2, inputSize); q++) {
 		if (lengths[q] == 0)
 			continue;
@@ -155,7 +165,6 @@ void orderMapAndRebuildEncodings(int *lengths, int *keysOfMap,
 				break;
 		}
 		if (binaryLen[0] > '1') {
-			//memset(binaryLen, '0', strlen(binaryLen)+1);
 			binaryLen[strlen(binaryLen)] = '0';
 			binaryLen[0] = '1';
 		}
@@ -204,7 +213,7 @@ void decompress(struct Node *tree, unsigned char buffer[], FILE *pFile,
 				writeByteAndSaveEccessD(writingBuffer, output);
 				uncompressed -= 8;
 			}
-
+			//walk through the tree and find the symbols
 			for (int bitI = 0;
 					bitI < strlen(bit)
 							&& absByteCounter
@@ -293,7 +302,9 @@ int decompressHuffman(char inputName[]) {
 		fseek(pFile, 0, SEEK_END);
 		int fileLen = ftell(pFile);
 		rewind(pFile);
+		//bitsToSkip near the end of the file due to padding with 0s
 		short bitsToSkip = fgetc(pFile);
+		//uncompressed bit at the end of the file
 		int uncompressed = fgetc(pFile);
 		short inputSize = fgetc(pFile);
 		int largestEncodingLen = fgetc(pFile);
