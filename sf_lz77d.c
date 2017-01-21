@@ -1,3 +1,11 @@
+/*
+ * This file contains all the necessary functions to decompress 4
+ * previously compressed file (using a custom LZ77 algorithm) into
+ * the original file.
+ *
+ * Developer: Axel KUHN
+ */
+
 #include <stdio.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -59,7 +67,7 @@ ReadingBuffer initReadingBuffer(FILE *f, int element_size) {
  * until there is enough information to parse an element, or the end of the file is reached.
  */
 void fillReadingBuffer(ReadingBuffer *rb) {
-	if (!rb->end_reached) {
+	if (!rb->end_reached && rb->inpfile != NULL) {
 		while (rb->current_size < rb->ELEMENT_SIZE && !feof(rb->inpfile)) {
 			// Get next char in file and convert it into individual bits
 			char c = fgetc(rb->inpfile);
@@ -220,8 +228,7 @@ int lzDecompress(char outfile[]) {
 	offsetFile = fopen("_offsets.lztmp", "r");
 	lengthFile = fopen("_lengths.lztmp", "r");
 	nextFile = fopen("_next.lztmp", "r");
-	if (flagFile == NULL || offsetFile == NULL || lengthFile == NULL
-			|| nextFile == NULL) {
+	if (flagFile == NULL || nextFile == NULL) {
 		printf("Errore di apertura di uno dei files temporanei in lettura\n");
 		return -1;
 	}

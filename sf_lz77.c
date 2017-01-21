@@ -1,3 +1,11 @@
+/*
+ * This file contains all the necessary functions to perform a custom
+ * LZ77 compression on an input file and return the output split
+ * into 4 distinct files. The search algorithm used is Knuth-Morris-Pratt.
+ *
+ * Developer: Axel KUHN
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
