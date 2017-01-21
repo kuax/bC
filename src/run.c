@@ -1,3 +1,10 @@
+/*
+ * Main program: interprets command line input and launches algorithms
+ * in the right sequence to compress/decompress given files.
+ *
+ * Developer: Axel KUHN
+ */
+
 #include "sf_lz77.h"
 #include "sf_lz77d.h"
 #include "compHuff.h"
@@ -12,16 +19,19 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Numero di argomenti insufficiente!\n");
 		return 1;
 	} else {
+		// Retrieve input/output names
 		char *infile = strcat(argv[2], "\0");
 		char *outfile = strcat(argv[3], "\0");
-		if (strcmp(argv[1], "-c") == 0) {
 
+		if (strcmp(argv[1], "-c") == 0) {
 			// Launch compression
+
 			int d_s = 1 << 12; // Dictionary size: 4096kB
 			int la_s = 1 << 9; // Look Ahead size: 512B
 
+			// Try compressing
 			if (lzCompress(infile, d_s, la_s) != -1) {
-				//compressHuffman(outfile);
+				compressHuffman(outfile);
 				return 0;
 			} else {
 				printf("Errore nella compressione del file\n");
@@ -29,7 +39,7 @@ int main(int argc, char *argv[]) {
 			}
 		} else if (strcmp(argv[1], "-d") == 0) {
 			// Decompression
-			//decompressHuffman(infile);
+			decompressHuffman(infile);
 			lzDecompress(outfile);
 			return 0;
 		} else {

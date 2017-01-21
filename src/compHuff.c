@@ -374,15 +374,15 @@ void canonicalize(int upperBound, struct encoding myEncoding[],
 	//printf("THIS %c %s \n", myEncoding[0].letter, myEncoding[0].code);
 	strcpy(myEncoding[0].code, newCode);
 	for (int encI = 1; encI < differentChars; encI++) {
-		for (int q = strlen(newCode) - 1; q > 0; q--)    //next binary code
-				{
+		for (int q = strlen(newCode) - 1;
+				q > 0 || (q == 0 && strlen(newCode) == 1); q--) { //next binary code
 			if (newCode[q] == '0')
 				newCode[q] = '1';
-			else {
+			else if (q > 0) {
 				newCode[q] = '0';
 				newCode[q - 1]++;
 			}
-			if (newCode[q - 1] <= '1')
+			if (q > 0 && newCode[q - 1] <= '1')
 				break;
 		}
 		if (newCode[0] == '2') {

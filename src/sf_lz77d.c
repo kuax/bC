@@ -237,8 +237,6 @@ int lzDecompress(char outfile[]) {
 	short dictionary_size, look_ahead_size;
 	fread(&dictionary_size, sizeof(short), 1, flagFile);
 	fread(&look_ahead_size, sizeof(short), 1, flagFile);
-	printf("Dictionary size: %d\nLook Ahead size: %d\n", dictionary_size,
-			look_ahead_size);
 
 	// Initialize variables
 	int flagBitSize = 1;

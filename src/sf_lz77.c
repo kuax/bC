@@ -357,7 +357,6 @@ int lzCompress(char inpfile[], int dictionary_size,
 	struct stat inputfstat;
 	stat(inpfile, &inputfstat);
 	if (inputfstat.st_size == 0) {
-		printf("File in input vuoto.\n");
 		fclose(inpfptr);
 		return 0;
 	}
