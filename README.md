@@ -11,4 +11,5 @@ and subsequently passes 4 files to a custom Huffman implementation for the final
 
 ## Results
 
-On the files given to test our algorithm, results were just below a standard ZIP compression.
+On the files given to test our algorithm, compression ratio results were max 10% above a standard ZIP compression
+of the same file (see documentation), yet time-wise our algorithm did take a bit longer...
