@@ -2,7 +2,7 @@
 
 This is a school project in which we had to develop a lossless general-purpose file compressor.
 
-Developed by [@kuax](https://github.com/kuax) and [@ChristianPao](https://github.com/ChristianPao)
+Developed by [@kuax](https://github.com/kuax) and [@ChristianPao](https://github.com/ChristianPao), back in the day Git wasn't yet in our toolbox :)
 
 ## Algorithms
 
